@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HTTP Client</title>
+</head>
+<body>
+  <h1>HTTP Client</h1>
+  <input type="text" id="keyword" placeholder="Enter keyword" />
+  <button onclick="getUrls()">Search</button>
+  <button onclick="downloadUrls()">Download All URLs</button> <!-- Кнопка для загрузки всех URL -->
+  <ul id="urls"></ul>
+  <div id="progress">Progress: 0%</div>
+
+  <script>
+    // Подключение к серверу WebSocket
+    const ws = new WebSocket('ws://localhost:3000');
+
+    // Обработка сообщений от сервера (например, прогресса)
+    ws.onmessage = function(event) {
+      const data = JSON.parse(event.data);
+      document.getElementById('progress').innerText = `Progress: ${data.progress}%`;
+    };
+
+    // Обработка ошибок WebSocket
+    ws.onerror = function(event) {
+      console.error("WebSocket error:", event);
+      document.getElementById('progress').innerText = "Error: Failed to connect to the server.";
+    };
+
+    // Функция для получения URL по ключевому слову
+    function getUrls() {
+      const keyword = document.getElementById('keyword').value;
+
+      // Отправка запроса на сервер
+      fetch(`http://localhost:3000/get-urls/${keyword}`)
+        .then(response => {
+          if (!response.ok) {
+            // Обработка ошибок от сервера (например, 404 или 500)
+            throw new Error(`HTTP error! Status: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then(urls => {
+          const ul = document.getElementById('urls');
+          ul.innerHTML = ''; // Очищаем старые результаты
+
+          // Проверка, есть ли URL
+          if (urls.length > 0) {
+            urls.forEach(url => {
+              const li = document.createElement('li');
+              li.textContent = url; // Добавляем URL в список
+              ul.appendChild(li);
+            });
+
+            // Отправка сообщения на сервер для начала загрузки
+            ws.send('Start downloading...');
+          } else {
+            ul.innerHTML = 'No URLs found.'; // Если URL не найдены
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          // Выводим ошибку в интерфейсе
+          const ul = document.getElementById('urls');
+          ul.innerHTML = `Error: ${error.message}`;
+        });
+    }
+
+    // Функция для скачивания всех URL (многозадачность)
+    function downloadUrls() {
+      const keyword = document.getElementById('keyword').value;
+
+      // Отправка запроса на сервер для скачивания всех URL
+      fetch(`http://localhost:3000/download-urls/${keyword}`)
+        .then(response => {
+          if (!response.ok) {
+            // Обработка ошибок от сервера (например, 404 или 500)
+            throw new Error(`HTTP error! Status: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          const ul = document.getElementById('urls');
+          ul.innerHTML = ''; // Очищаем старые результаты
+
+          if (data.results) {
+            data.results.forEach(url => {
+              const li = document.createElement('li');
+              li.textContent = `Downloaded: ${url}`;
+              ul.appendChild(li);
+            });
+          } else {
+            ul.innerHTML = 'No URLs found.';
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          // Выводим ошибку в интерфейсе
+          const ul = document.getElementById('urls');
+          ul.innerHTML = `Error: ${error.message}`;
+        });
+    }
+  </script>
+</body>
+</html>
